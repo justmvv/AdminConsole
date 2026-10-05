@@ -1,0 +1,50 @@
+# ============================================================================
+#  dev profile: embedded LDAP with test users + demo data in Kafka and Artemis.
+#  DO NOT use on real environments.
+#
+#  Users (password = login):
+#    viewer   — VIEWER
+#    operator — OPERATOR
+#    admin    — ADMIN
+# ============================================================================
+
+spring:
+  ldap:
+    embedded:
+      base-dn: dc=console,dc=local
+      ldif: classpath:dev-users.ldif
+      port: 33389
+      validation:
+        enabled: false
+
+console:
+  ui:
+    environment-name: ${CONSOLE_ENV_NAME:DEV}
+    environment-color: ${CONSOLE_ENV_COLOR:#2e7d32}
+  security:
+    mode: LDAP
+    ldap:
+      url: ldap://localhost:33389/dc=console,dc=local
+      manager-dn: ""
+      user-search-base: ou=people
+      user-search-filter: (uid={0})
+      group-search-base: ou=groups
+      group-search-filter: (member={0})
+    role-mapping:
+      VIEWER: console-viewers
+      OPERATOR: console-operators
+      ADMIN: console-admins
+  db:
+    insert:
+      allowed-tables: ${CONSOLE_DB_INSERT_ALLOWED_TABLES:orch.*}
+    update:
+      allowed-columns: ${CONSOLE_DB_UPDATE_ALLOWED_COLUMNS:orch.retry_task.*,orch.payment.status,orch.payment.attributes,orch.outbox.sent_at}
+  kafka:
+    produce:
+      allowed-topics: ${CONSOLE_KAFKA_PRODUCE_ALLOWED_TOPICS:payments.*}
+  dev:
+    seed-kafka: ${CONSOLE_DEV_SEED_KAFKA:true}
+    # demo messages in Artemis (if the section is enabled); needs an account with send on orch.* and DLQ
+    seed-artemis: ${CONSOLE_DEV_SEED_ARTEMIS:true}
+    artemis-seed-user: ${CONSOLE_DEV_ARTEMIS_SEED_USER:admin}
+    artemis-seed-password: ${CONSOLE_DEV_ARTEMIS_SEED_PASSWORD:admin}

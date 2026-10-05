@@ -1,0 +1,5 @@
+# Shell scripts run inside Linux containers: always LF, even on Windows checkouts
+*.sh      text eol=lf
+mvnw      text eol=lf
+*.cmd     text eol=crlf
+* text=auto

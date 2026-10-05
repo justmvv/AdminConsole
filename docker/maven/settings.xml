@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Example settings.xml for building in an isolated network through a corporate Nexus/Artifactory.
+  Used only when passed explicitly: docker build --build-arg MVN_EXTRA_ARGS="-s /build/docker/maven/settings.xml" .
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0">
+    <mirrors>
+        <mirror>
+            <id>corp-nexus</id>
+            <name>Corporate Maven mirror</name>
+            <url>https://nexus.corp.local/repository/maven-public/</url>
+            <mirrorOf>*</mirrorOf>
+        </mirror>
+    </mirrors>
+</settings>

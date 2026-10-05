@@ -1,0 +1,45 @@
+# =============================================================================
+#  Example deployment: external PostgreSQL, Kafka and Active Directory.
+#    docker compose -f docker-compose.prod.yml up -d --build
+#  Pass secrets via .env / your container orchestrator's secrets.
+# =============================================================================
+
+services:
+  console:
+    build: .
+    image: admin-console:latest
+    restart: unless-stopped
+    environment:
+      # --- environment ---
+      CONSOLE_ENV_NAME: PROD
+      CONSOLE_ENV_COLOR: "#c62828"
+
+      # --- target PostgreSQL (account with SELECT + INSERT on the whitelist) ---
+      DB_URL: jdbc:postgresql://orch-db.corp.local:5432/orchestrator
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      CONSOLE_DB_SCHEMAS: orch
+      CONSOLE_DB_INSERT_ALLOWED_TABLES: orch.retry_task,orch.outbox
+
+      # --- Kafka ---
+      KAFKA_BOOTSTRAP_SERVERS: kafka1.corp.local:9093,kafka2.corp.local:9093,kafka3.corp.local:9093
+      CONSOLE_KAFKA_PRODUCE_ALLOWED_TOPICS: payments.commands,payments.dlq
+
+      # --- Active Directory ---
+      CONSOLE_SECURITY_MODE: AD
+      LDAP_URL: ldaps://dc01.corp.local:636
+      AD_DOMAIN: corp.local
+      CONSOLE_ROLE_VIEWER_GROUPS: SG-OrchConsole-Viewers
+      CONSOLE_ROLE_OPERATOR_GROUPS: SG-OrchConsole-Operators
+      CONSOLE_ROLE_ADMIN_GROUPS: SG-OrchConsole-Admins
+
+      # Extra config (SASL/SSL for Kafka etc.), see docker/console-prod-example.yml
+      SPRING_CONFIG_ADDITIONAL_LOCATION: optional:file:/config/console.yml
+      JAVA_OPTS: >-
+        -XX:MaxRAMPercentage=75 -Duser.timezone=Europe/Moscow
+        -Djavax.net.ssl.trustStore=/config/truststore.jks -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/config:ro
+      - ./logs:/app/logs

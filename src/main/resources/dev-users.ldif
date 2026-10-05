@@ -1,0 +1,62 @@
+dn: dc=console,dc=local
+objectClass: top
+objectClass: domain
+dc: console
+
+dn: ou=people,dc=console,dc=local
+objectClass: top
+objectClass: organizationalUnit
+ou: people
+
+dn: ou=groups,dc=console,dc=local
+objectClass: top
+objectClass: organizationalUnit
+ou: groups
+
+dn: uid=viewer,ou=people,dc=console,dc=local
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+uid: viewer
+cn: Viewer User
+sn: Viewer
+userPassword: viewer
+
+dn: uid=operator,ou=people,dc=console,dc=local
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+uid: operator
+cn: Operator User
+sn: Operator
+userPassword: operator
+
+dn: uid=admin,ou=people,dc=console,dc=local
+objectClass: top
+objectClass: person
+objectClass: organizationalPerson
+objectClass: inetOrgPerson
+uid: admin
+cn: Admin User
+sn: Admin
+userPassword: admin
+
+dn: cn=console-viewers,ou=groups,dc=console,dc=local
+objectClass: top
+objectClass: groupOfNames
+cn: console-viewers
+member: uid=viewer,ou=people,dc=console,dc=local
+
+dn: cn=console-operators,ou=groups,dc=console,dc=local
+objectClass: top
+objectClass: groupOfNames
+cn: console-operators
+member: uid=operator,ou=people,dc=console,dc=local
+
+dn: cn=console-admins,ou=groups,dc=console,dc=local
+objectClass: top
+objectClass: groupOfNames
+cn: console-admins
+member: uid=admin,ou=people,dc=console,dc=local

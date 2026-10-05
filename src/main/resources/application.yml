@@ -1,0 +1,190 @@
+# ============================================================================
+#  Admin Console — base configuration.
+#  Any parameter can be overridden with an environment variable (relaxed binding):
+#    console.security.mode        -> CONSOLE_SECURITY_MODE
+#    spring.datasource.url        -> SPRING_DATASOURCE_URL
+#  Complex settings (Kafka SASL/SSL etc.) are easier to keep in a separate file
+#  and load with: SPRING_CONFIG_ADDITIONAL_LOCATION=/config/console.yml
+# ============================================================================
+
+server:
+  port: ${PORT:8080}
+  servlet:
+    session:
+      # Fallback HTTP session timeout (closed tab). While a tab is open, Vaadin heartbeats extend
+      # the session — inactivity is handled by console.security.session.idle-timeout.
+      timeout: ${SESSION_TIMEOUT:30m}
+  # correct links/redirects behind a reverse proxy (nginx, ingress)
+  forward-headers-strategy: framework
+
+spring:
+  application:
+    name: admin-console
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/orchestrator}
+    username: ${DB_USER:console}
+    password: ${DB_PASSWORD:console}
+    hikari:
+      pool-name: console
+      maximum-pool-size: ${DB_POOL_SIZE:8}
+      minimum-idle: 1
+      connection-timeout: 10000
+      # do not fail console startup if the database is temporarily unavailable
+      initialization-fail-timeout: -1
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+vaadin:
+  launch-browser: false
+  # scan only our own packages — faster startup
+  allowed-packages: ru.ops.console,com.vaadin
+
+management:
+  health:
+    db:
+      # DB section disabled — health does not check the target database
+      enabled: ${CONSOLE_FEATURE_DB:true}
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: INFO
+    ru.ops.console: INFO
+    org.apache.kafka: WARN
+
+console:
+  # Which console sections are enabled. A disabled section is hidden in the menu, its views are unavailable,
+  # and the console does not connect to the corresponding system.
+  features:
+    db: ${CONSOLE_FEATURE_DB:true}
+    kafka: ${CONSOLE_FEATURE_KAFKA:${CONSOLE_KAFKA_ENABLED:true}}
+    artemis: ${CONSOLE_FEATURE_ARTEMIS:false}
+
+  ui:
+    title: ${CONSOLE_TITLE:Консоль сопровождения}
+    environment-name: ${CONSOLE_ENV_NAME:PROD}
+    environment-color: ${CONSOLE_ENV_COLOR:#c62828}
+
+  security:
+    # AD | LDAP
+    mode: ${CONSOLE_SECURITY_MODE:AD}
+    ldap:
+      url: ${LDAP_URL:ldap://dc01.corp.local:389}
+      # --- AD ---
+      domain: ${AD_DOMAIN:corp.local}
+      root-dn: ${AD_ROOT_DN:}
+      # --- LDAP ---
+      manager-dn: ${LDAP_MANAGER_DN:}
+      manager-password: ${LDAP_MANAGER_PASSWORD:}
+      user-search-base: ${LDAP_USER_SEARCH_BASE:ou=people}
+      user-search-filter: ${LDAP_USER_SEARCH_FILTER:(uid={0})}
+      group-search-base: ${LDAP_GROUP_SEARCH_BASE:ou=groups}
+      group-search-filter: ${LDAP_GROUP_SEARCH_FILTER:(member={0})}
+    session:
+      # end the session after user inactivity; 0 — disabled
+      idle-timeout: ${SESSION_IDLE_TIMEOUT:15m}
+      # countdown warning before the session ends
+      warning-before: ${SESSION_IDLE_WARNING:60s}
+    # directory group CNs -> console roles (comma-separated)
+    role-mapping:
+      VIEWER: ${CONSOLE_ROLE_VIEWER_GROUPS:SG-OrchConsole-Viewers}
+      OPERATOR: ${CONSOLE_ROLE_OPERATOR_GROUPS:SG-OrchConsole-Operators}
+      ADMIN: ${CONSOLE_ROLE_ADMIN_GROUPS:SG-OrchConsole-Admins}
+
+  db:
+    # schemas available for browsing (comma-separated, masks *). Empty — all non-system schemas.
+    schemas: ${CONSOLE_DB_SCHEMAS:}
+    query-timeout-seconds: ${CONSOLE_DB_QUERY_TIMEOUT:30}
+    max-export-rows: ${CONSOLE_DB_MAX_EXPORT_ROWS:10000}
+    show-partitions: false
+    insert:
+      enabled: ${CONSOLE_DB_INSERT_ENABLED:true}
+      # whitelist: schema.table, schema.*, * (comma-separated). Empty — inserts are disabled.
+      allowed-tables: ${CONSOLE_DB_INSERT_ALLOWED_TABLES:}
+      require-reason: true
+    update:
+      enabled: ${CONSOLE_DB_UPDATE_ENABLED:true}
+      # whitelist of editable columns: schema.table.column, masks * (orch.retry_task.*), comma-separated.
+      # Empty — editing is disabled. The DB account also needs the UPDATE privilege on the column.
+      allowed-columns: ${CONSOLE_DB_UPDATE_ALLOWED_COLUMNS:}
+      require-reason: true
+      # max rows in one update by filter
+      max-rows: ${CONSOLE_DB_UPDATE_MAX_ROWS:1000}
+      # how long to wait for rows locked by the application, seconds
+      lock-timeout-seconds: 3
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    client-id-prefix: admin-console
+    request-timeout-ms: 15000
+    hide-internal-topics: true
+    # Any Kafka client properties, for example:
+    # properties:
+    #   security.protocol: SASL_SSL
+    #   sasl.mechanism: SCRAM-SHA-512
+    #   sasl.jaas.config: org.apache.kafka.common.security.scram.ScramLoginModule required username="console" password="***";
+    #   ssl.truststore.location: /config/truststore.jks
+    #   ssl.truststore.password: "***"
+    browse:
+      max-messages: 1000
+      max-scan-per-partition: 50000
+      timeout-ms: 20000
+    produce:
+      enabled: ${CONSOLE_KAFKA_PRODUCE_ENABLED:true}
+      # whitelist of topics (comma-separated, masks *). Empty — publishing is disabled.
+      allowed-topics: ${CONSOLE_KAFKA_PRODUCE_ALLOWED_TOPICS:}
+      require-reason: true
+
+  artemis:
+    # tcp://host:61616; several brokers — (tcp://a:61616,tcp://b:61616); TLS — ?sslEnabled=true;trustStorePath=...
+    url: ${ARTEMIS_URL:tcp://localhost:61616}
+    # browsing account: the browse permission on the needed queues is enough
+    user: ${ARTEMIS_USER:}
+    password: ${ARTEMIS_PASSWORD:}
+    # queues to browse: exact names work without management permissions; masks (orch.*) filter
+    # the queues discovered via management. Empty — all discovered queues.
+    queues: ${CONSOLE_ARTEMIS_QUEUES:}
+    request-timeout-ms: 15000
+    management:
+      # queue list and counters; needs manage + permissions on the temporary reply queue (see README)
+      enabled: ${CONSOLE_ARTEMIS_MANAGEMENT_ENABLED:true}
+      address: activemq.management
+      reply-prefix: admin-console.reply
+    browse:
+      max-messages: 500
+      max-scan: 10000
+      timeout-ms: 20000
+      max-body-bytes: 1048576
+    produce:
+      enabled: ${CONSOLE_ARTEMIS_PRODUCE_ENABLED:true}
+      # whitelist of addresses (comma-separated, masks *). Empty — publishing is disabled.
+      allowed-addresses: ${CONSOLE_ARTEMIS_PRODUCE_ALLOWED_ADDRESSES:}
+      require-reason: true
+      # separate account with the send permission (empty — the browsing account is used)
+      user: ${ARTEMIS_PRODUCE_USER:}
+      password: ${ARTEMIS_PRODUCE_PASSWORD:}
+
+  # Concurrency caps for heavy operations across all users of this instance
+  limits:
+    max-parallel-browse: ${CONSOLE_MAX_PARALLEL_BROWSE:4}
+    max-parallel-exports: ${CONSOLE_MAX_PARALLEL_EXPORTS:2}
+    wait-ms: 10000
+
+  # Read-only mode: every write (DB insert/update, Kafka/Artemis publishing) is off
+  read-only: ${CONSOLE_READ_ONLY:false}
+
+  audit:
+    jdbc-enabled: ${CONSOLE_AUDIT_JDBC_ENABLED:true}
+    # separate database for the audit log (so nothing is created in the target system's DB); empty — main DB
+    jdbc-url: ${CONSOLE_AUDIT_DB_URL:}
+    jdbc-user: ${CONSOLE_AUDIT_DB_USER:}
+    jdbc-password: ${CONSOLE_AUDIT_DB_PASSWORD:}
+    jdbc-table: ${CONSOLE_AUDIT_TABLE:admin_console.audit_log}
+    create-table: true

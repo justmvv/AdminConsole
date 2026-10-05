@@ -1,0 +1,14 @@
+# Example /config/console.yml for a deployment (loaded via SPRING_CONFIG_ADDITIONAL_LOCATION).
+console:
+  kafka:
+    properties:
+      security.protocol: SASL_SSL
+      sasl.mechanism: SCRAM-SHA-512
+      sasl.jaas.config: org.apache.kafka.common.security.scram.ScramLoginModule required username="admin-console" password="CHANGE_ME";
+      ssl.truststore.location: /config/kafka-truststore.jks
+      ssl.truststore.password: CHANGE_ME
+  security:
+    role-mapping:
+      VIEWER: [SG-OrchConsole-Viewers, SG-Support-L2]
+      OPERATOR: [SG-OrchConsole-Operators]
+      ADMIN: [SG-OrchConsole-Admins]

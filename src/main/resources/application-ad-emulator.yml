@@ -1,0 +1,15 @@
+# ============================================================================
+#  ad-emulator profile: login through the Active Directory emulator (docker-compose.ad.yml).
+#  Used together with dev: SPRING_PROFILES_ACTIVE=dev,ad-emulator
+# ============================================================================
+
+console:
+  security:
+    mode: AD
+    ldap:
+      url: ${LDAP_URL:ldap://samba-ad:389}
+      domain: corp.local
+    role-mapping:
+      VIEWER: SG-OrchConsole-Viewers
+      OPERATOR: SG-OrchConsole-Operators
+      ADMIN: SG-OrchConsole-Admins

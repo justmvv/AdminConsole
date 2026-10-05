@@ -1,0 +1,31 @@
+# =============================================================================
+#  Login through an Active Directory emulator (Samba 4, domain CORP.LOCAL) instead of the dev LDAP.
+#  The console runs in production mode console.security.mode=AD.
+#
+#    docker compose -f docker-compose.yml -f docker-compose.ad.yml up -d --build
+#
+#  Test users and passwords — docker/samba-ad/seed.sh.
+#  From the host the directory is reachable at ldap://localhost:1389 (e.g. for ldapsearch).
+# =============================================================================
+
+services:
+  samba-ad:
+    build: docker/samba-ad
+    image: admin-console-samba-ad:latest
+    hostname: dc01
+    ports:
+      - "1389:389"
+    volumes:
+      - samba-data:/var/lib/samba
+      - samba-conf:/etc/samba
+
+  console:
+    depends_on:
+      samba-ad:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: dev,ad-emulator
+
+volumes:
+  samba-data:
+  samba-conf:

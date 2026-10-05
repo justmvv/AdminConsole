@@ -1,0 +1,117 @@
+# =============================================================================
+#  Local stand: console + PostgreSQL (demo orchestrator schema) + Kafka (KRaft)
+#  + ActiveMQ Artemis + embedded test LDAP (dev profile).
+#
+#    docker compose up -d --build
+#    open http://localhost:8080   (viewer/viewer, operator/operator, admin/admin)
+#
+#  From the host Kafka is at localhost:29092, PostgreSQL at localhost:5432,
+#  Artemis at localhost:61616 (broker web console http://localhost:8161, admin/admin).
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: orchestrator
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      TZ: Europe/Moscow
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d orchestrator"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  kafka:
+    image: apache/kafka:3.9.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 3
+    ports:
+      - "29092:29092"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 15s
+
+  artemis:
+    image: apache/activemq-artemis:2.40.0-alpine
+    environment:
+      ARTEMIS_USER: admin
+      ARTEMIS_PASSWORD: admin
+    volumes:
+      # demo queues, users and permissions: console-ro — browse only, console — + management,
+      # console-send — publishing (docker/artemis/etc-override)
+      - ./docker/artemis/etc-override:/var/lib/artemis-instance/etc-override:ro
+    ports:
+      - "61616:61616"
+      - "8161:8161"
+    healthcheck:
+      test: ["CMD-SHELL", "/var/lib/artemis-instance/bin/artemis check node --up --url tcp://localhost:61616 --user admin --password admin > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 15s
+      retries: 20
+      start_period: 15s
+
+  console:
+    build: .
+    image: admin-console:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      artemis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      CONSOLE_TITLE: Консоль сопровождения оркестратора
+      DB_URL: jdbc:postgresql://postgres:5432/orchestrator
+      DB_USER: console
+      DB_PASSWORD: console
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      CONSOLE_DB_SCHEMAS: orch,admin_console
+      CONSOLE_DB_INSERT_ALLOWED_TABLES: orch.retry_task,orch.outbox,orch.payment,orch.dictionary_currency
+      CONSOLE_DB_UPDATE_ALLOWED_COLUMNS: orch.retry_task.*,orch.payment.status,orch.payment.attributes,orch.outbox.sent_at
+      CONSOLE_KAFKA_PRODUCE_ALLOWED_TOPICS: payments.*
+      # Artemis: browsing with a browse + management account, publishing with a separate send-only account.
+      # To try minimal permissions, set ARTEMIS_USER/PASSWORD to console-ro.
+      CONSOLE_FEATURE_ARTEMIS: "true"
+      ARTEMIS_URL: tcp://artemis:61616
+      ARTEMIS_USER: console
+      ARTEMIS_PASSWORD: console
+      CONSOLE_ARTEMIS_QUEUES: orch.payment.commands,DLQ,orch.*
+      ARTEMIS_PRODUCE_USER: console-send
+      ARTEMIS_PRODUCE_PASSWORD: console-send
+      CONSOLE_ARTEMIS_PRODUCE_ALLOWED_ADDRESSES: orch.payment.*
+      # idle session timeout (to try it: SESSION_IDLE_TIMEOUT=90s docker compose up -d)
+      SESSION_IDLE_TIMEOUT: ${SESSION_IDLE_TIMEOUT:-15m}
+      SESSION_IDLE_WARNING: ${SESSION_IDLE_WARNING:-60s}
+      JAVA_OPTS: -XX:MaxRAMPercentage=75 -Duser.timezone=Europe/Moscow
+    ports:
+      - "8080:8080"
+    volumes:
+      - console-logs:/app/logs
+
+volumes:
+  pgdata:
+  console-logs:
